@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { setToken } from '../auth';
-import { API_URL } from '../config';
+import { login } from '../auth';
+import { api, isBusError } from '../api';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -24,24 +24,19 @@ export default function Login() {
     setIsLoading(true);
     
     try {
-      const response = await fetch(`${API_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-      const data = await response.json();
-
-      if (response.ok && data.token) {
-        setToken(data.token);
-        if (data.user) {
-          localStorage.setItem('user', JSON.stringify(data.user));
-        }
-        navigate('/dashboard');
-      } else {
-        setError(data.message || 'Login failed. Please check your credentials.');
-      }
+      await login(email, password);
+      navigate('/dashboard');
     } catch (err) {
-      setError('Server connection error.');
+      if (!isBusError(err) || ['network', 'timeout'].includes(err.kind)) {
+        setError('Server connection error.');
+      } else if (err.code === 'LOGIN_FAILED') {
+        setError('Invalid email or password');
+      } else if (err.code === 'LOGIN_LOCKED') {
+        const minutes = Math.max(1, Math.ceil((err.retryAfterMs ?? 0) / 60000));
+        setError(`Too many attempts. Try again in ${minutes} min.`);
+      } else {
+        setError(err.message || 'Login failed. Please check your credentials.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -56,21 +51,16 @@ export default function Login() {
       return;
     }
     try {
-      const response = await fetch(`${API_URL}/users`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: registerName, email: registerEmail, password: registerPassword, role: 'USER' })
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setRegisterSuccess('Account created successfully! Please log in.');
-        setIsRegister(false);
-        setRegisterName(''); setRegisterEmail(''); setRegisterPassword(''); setRegisterConfirm('');
-      } else {
-        setRegisterError(data.message || 'Error creating account.');
-      }
+      await api.post('/auth/register', { name: registerName, email: registerEmail, password: registerPassword }, { auth: false });
+      setRegisterSuccess('Account created successfully! Please log in.');
+      setIsRegister(false);
+      setRegisterName(''); setRegisterEmail(''); setRegisterPassword(''); setRegisterConfirm('');
     } catch (err) {
-      setRegisterError('Server connection error.');
+      if (!isBusError(err) || ['network', 'timeout'].includes(err.kind)) {
+        setRegisterError('Server connection error.');
+      } else {
+        setRegisterError(err.message || 'Error creating account.');
+      }
     }
   };
 

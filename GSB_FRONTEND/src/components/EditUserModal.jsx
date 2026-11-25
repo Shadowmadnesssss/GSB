@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { API_URL } from '../config';
+import { api } from '../api';
 
 const ROLES = [
   { label: "Administrator", value: "admin" },
@@ -37,20 +37,10 @@ export default function EditUserModal({ user, isOpen, onClose, onSave }) {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/users?email=${encodeURIComponent(user.email)}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) throw new Error("Error while updating");
-      const updated = await res.json();
+      const updated = await api.put('/users', form, { query: { email: user.email } });
       onSave(updated);
-    } catch (e) {
-      setError(e.message);
+    } catch {
+      setError("Error while updating");
     } finally {
       setLoading(false);
     }

@@ -1,12 +1,15 @@
-const express = require('express')
+import express from 'express'
+import * as userController from '../controllers/user_controller.js'
+import { verifyToken, isAdmin } from '../controllers/authentication_controller.js'
+
 const router = express.Router()
-const userController = require('../controllers/user_controller')
-const authenticationController = require('../controllers/authentication_controller')
 
-router.post('/', userController.createUser)
-router.get('/', authenticationController.verifyToken,userController.getUsers)
-router.put('/', authenticationController.verifyToken, userController.updateUser)
-router.delete('/', authenticationController.verifyToken, userController.deleteUser)
-router.put('/password', authenticationController.verifyToken, userController.resetPassword)
+// L'inscription publique passe par POST /auth/register (voir index.js) ;
+// créer un compte avec un rôle choisi est réservé aux admins.
+router.post('/', verifyToken, isAdmin, userController.createUser)
+router.get('/', verifyToken, userController.getUsers)
+router.put('/', verifyToken, userController.updateUser)
+router.delete('/', verifyToken, userController.deleteUser)
+router.put('/password', verifyToken, userController.resetPassword)
 
-module.exports = router
+export default router

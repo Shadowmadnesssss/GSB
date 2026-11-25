@@ -2,11 +2,11 @@ import React from "react";
 import Header from "../components/Header";
 import StatsCards from "../components/StatsCards";
 import StatsCharts from "../components/StatsCharts";
+import { logout } from "../auth";
 
 export default function Stats() {
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+  const handleLogout = async () => {
+    await logout();
     window.location.href = '/login';
   };
   return (

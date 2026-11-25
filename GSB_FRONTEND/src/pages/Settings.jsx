@@ -1,14 +1,14 @@
 import React, { useState } from "react";
 import Header from "../components/Header";
 import SettingsTabs from "../components/SettingsTabs";
-import { API_URL } from '../config';
+import { api } from '../api';
+import { logout } from '../auth';
 
 function ProfileForm() {
   const user = JSON.parse(localStorage.getItem('user'));
   const [form, setForm] = useState({ name: user?.name || '', email: user?.email || '' });
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(false);
-  const token = localStorage.getItem('token');
 
   const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -17,16 +17,11 @@ function ProfileForm() {
     setLoading(true);
     setMessage(null);
     try {
-      const res = await fetch(`${API_URL}/users?email=${encodeURIComponent(user.email)}`, {
-        method: "PUT",
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(form)
-      });
-      if (!res.ok) throw new Error("Error during update");
+      await api.put('/users', form, { query: { email: user.email } });
       setMessage("Profile updated!");
       localStorage.setItem('user', JSON.stringify({ ...user, ...form }));
-    } catch (e) {
-      setMessage(e.message);
+    } catch {
+      setMessage("Error during update");
     } finally {
       setLoading(false);
     }
@@ -57,7 +52,6 @@ function PasswordForm() {
   });
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(false);
-  const token = localStorage.getItem('token');
 
   const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -90,20 +84,11 @@ function PasswordForm() {
     }
 
     try {
-      const res = await fetch(`${API_URL}/users/password`, {
-        method: "PUT",
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({
-          email: user.email,
-          currentPassword: form.currentPassword,
-          newPassword: form.newPassword
-        })
+      await api.put('/users/password', {
+        email: user.email,
+        currentPassword: form.currentPassword,
+        newPassword: form.newPassword
       });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Error changing password");
-      }
 
       setMessage("Password changed successfully!");
       setForm({
@@ -112,7 +97,7 @@ function PasswordForm() {
         confirmPassword: ''
       });
     } catch (e) {
-      setMessage(e.message);
+      setMessage(e.message || "Error changing password");
     } finally {
       setLoading(false);
     }
@@ -170,9 +155,8 @@ function PasswordForm() {
 }
 
 export default function Settings() {
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+  const handleLogout = async () => {
+    await logout();
     window.location.href = '/login';
   };
   return (

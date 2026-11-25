@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { API_URL } from '../config';
+import { api } from '../api';
 
 export default function BillModal({ bill, isOpen, onClose, onUpdate }) {
   const [editedBill, setEditedBill] = useState(null);
@@ -30,26 +30,10 @@ export default function BillModal({ bill, isOpen, onClose, onUpdate }) {
         // Sinon, récupérer l'URL signée via l'API
         if (bill._id) {
           try {
-            const token = localStorage.getItem('token');
-            const url = `${API_URL}/bills/${bill._id}/proof-url`;
-            
-            const res = await fetch(url, {
-              headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            if (res.ok) {
-              const data = await res.json();
-              // Décoder l'URL pour corriger les &amp; en &
-              const decodedUrl = data.url.replace(/&amp;/g, '&');
-              setProofUrl(decodedUrl);
-            } else {
-              // Fallback vers l'URL directe si possible
-              if (bill.proof) {
-                setProofUrl(bill.proof);
-              } else {
-                setProofUrl(null);
-              }
-            }
+            const data = await api.get(`/bills/${bill._id}/proof-url`);
+            // Décoder l'URL pour corriger les &amp; en &
+            const decodedUrl = data.url.replace(/&amp;/g, '&');
+            setProofUrl(decodedUrl);
           } catch (error) {
             // Fallback vers l'URL directe
             if (bill.proof) {
@@ -81,30 +65,19 @@ export default function BillModal({ bill, isOpen, onClose, onUpdate }) {
     if (!isAdmin) return;
 
     try {
-      const response = await fetch(`${API_URL}/bills/${editedBill._id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          date: editedBill.date,
-          type: editedBill.type,
-          merchant: editedBill.merchant,
-          amount: parseFloat(editedBill.amount),
-          description: editedBill.description,
-          status: editedBill.status
-        })
+      const updatedBill = await api.put(`/bills/${editedBill._id}`, {
+        date: editedBill.date,
+        type: editedBill.type,
+        merchant: editedBill.merchant,
+        amount: parseFloat(editedBill.amount),
+        description: editedBill.description,
+        status: editedBill.status
       });
-
-      if (response.ok) {
-        const updatedBill = await response.json();
-        setEditedBill(updatedBill);
-        if (onUpdate) {
-          onUpdate(updatedBill);
-        }
-        setIsEditing(false);
+      setEditedBill(updatedBill);
+      if (onUpdate) {
+        onUpdate(updatedBill);
       }
+      setIsEditing(false);
     } catch (error) {
       console.error('Error updating bill:', error);
     }
@@ -114,16 +87,9 @@ export default function BillModal({ bill, isOpen, onClose, onUpdate }) {
     if (!isAdmin) return;
     if (!window.confirm('Are you sure you want to delete this expense note?')) return;
     try {
-      const response = await fetch(`${API_URL}/bills/${editedBill._id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      if (response.ok) {
-        if (onUpdate) onUpdate(null, editedBill._id);
-        onClose();
-      }
+      await api.delete(`/bills/${editedBill._id}`);
+      if (onUpdate) onUpdate(null, editedBill._id);
+      onClose();
     } catch (error) {
       console.error('Error during deletion:', error);
     }

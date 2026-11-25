@@ -1,0 +1,141 @@
+diff --git a/src/api/authApi.js b/src/api/authApi.js
+index 9f19f0b..fec859e 100644
+--- a/src/api/authApi.js
++++ b/src/api/authApi.js
+@@ -28,6 +28,9 @@ export function createAuthApi({
+   users = createJsonUserStore(),       // { findById, findByUsername, getPermissions }
+   limiter = createLoginLimiter(),
+   prefix = "/auth",
++  // [GSB] Vérification du mot de passe injectable : (password, passwordHash, user) => boolean | Promise<boolean>.
++  // Sert à accepter d'anciens formats de hash et à les migrer vers scrypt au login.
++  verifyPassword: checkPassword = verifyPassword,
+ } = {}) {
+   if (!tokens) throw new Error("createAuthApi : l'option 'tokens' (createTokenService) est obligatoire");
+ 
+@@ -78,7 +81,7 @@ export function createAuthApi({
+       }
+ 
+       const user = await users.findByUsername(username);
+-      const ok = user ? await verifyPassword(password, user.passwordHash) : await verifyAgainstDummy(password);
++      const ok = user ? await checkPassword(password, user.passwordHash, user) : await verifyAgainstDummy(password);
+       if (!ok) {
+         limiter.fail(req.ip, username);
+         return fail(ctx, req, res, AuthStatus.LOGIN_FAILED, startedAt, {
+diff --git a/src/shared/auth/authenticate.js b/src/shared/auth/authenticate.js
+index 4ac41a1..f8642f3 100644
+--- a/src/shared/auth/authenticate.js
++++ b/src/shared/auth/authenticate.js
+@@ -11,6 +11,7 @@ import { verifyRequest } from "./verifyToken.js";
+ import { defaultLogger } from "./events.js";
+ import { createFinisher } from "./finishStatus.js";
+ import { createEventBus } from "../eventBus.js";
++import { createJsonUserStore } from "./db.js";
+ 
+ // "/docs/*" = tout ce qui commence par "/docs/" ; sinon égalité exacte.
+ function isPublic(path, publicRoutes) {
+@@ -26,6 +27,7 @@ export function createAuthenticate({
+   handlers = {},                // surcharge des actions par statut
+   events = createEventBus(),    // bus partagé (sinon un bus privé)
+   logger = defaultLogger,       // false pour désactiver
++  users = createJsonUserStore(), // [GSB] { findById, getPermissions }, sync ou async
+ } = {}) {
+   if (!secret) throw new Error("createAuthenticate : l'option 'secret' est obligatoire");
+ 
+@@ -33,20 +35,30 @@ export function createAuthenticate({
+ 
+   function authenticate(req, res, next) {
+     const startedAt = process.hrtime.bigint();
++    const done = (result) => {
++      req.auth = {
++        status: result.status.code,
++        user: result.user ?? null,
++        permissions: result.permissions ?? [],
++      };
++      finish(req, res, next, result, startedAt);
++    };
++    const failed = (err) => ({ status: AuthStatus.INTERNAL_ERROR, reason: err?.message ?? String(err) });
++
+     let result;
+     try {
+       result = isPublic(req.path, publicRoutes)
+         ? { status: AuthStatus.PUBLIC_ROUTE }
+-        : verifyRequest(req, { secret, algorithms });
++        : verifyRequest(req, { secret, algorithms, users });
+     } catch (err) {
+-      result = { status: AuthStatus.INTERNAL_ERROR, reason: err.message };
++      result = failed(err);
+     }
+-    req.auth = {
+-      status: result.status.code,
+-      user: result.user ?? null,
+-      permissions: result.permissions ?? [],
+-    };
+-    finish(req, res, next, result, startedAt);
++    // [GSB] Magasin d'utilisateurs asynchrone (BDD) : on attend le résultat avant de conclure.
++    if (result && typeof result.then === "function") {
++      result.then(done, (err) => done(failed(err)));
++      return;
++    }
++    done(result);
+   }
+ 
+   authenticate.events = events; // pour s'abonner quand on n'a pas passé de bus partagé
+diff --git a/src/shared/auth/verifyToken.js b/src/shared/auth/verifyToken.js
+index f640271..83d152b 100644
+--- a/src/shared/auth/verifyToken.js
++++ b/src/shared/auth/verifyToken.js
+@@ -1,9 +1,16 @@
+ // Étape 4 : transformer une requête en statut d'authentification.
+ // Cette fonction ne répond jamais au client : elle se contente de dire CE QUI SE PASSE.
+ // C'est le bus (authBus.js) qui décide ensuite quoi faire de ce statut.
++//
++// [GSB] Patch : le magasin d'utilisateurs est injectable (option `users`, comme pour createAuthApi),
++// ses fonctions peuvent être sync ou async. Sans `users`, comportement d'origine (fichiers JSON).
++// Avec un magasin sync, le résultat reste synchrone ; avec un magasin async, c'est une Promise.
+ import jwt from "jsonwebtoken";
+ import { AuthStatus } from "./statuses.js";
+-import { findUserById, getPermissionsForRole, toPublicUser } from "./db.js";
++import { createJsonUserStore, toPublicUser } from "./db.js";
++
++const isThenable = (value) => value !== null && typeof value === "object" && typeof value.then === "function";
++const then = (value, fn) => (isThenable(value) ? value.then(fn) : fn(value));
+ 
+ // Lit le header "Authorization: Bearer <token>".
+ function extractToken(req) {
+@@ -17,7 +24,7 @@ function extractToken(req) {
+   return { token };
+ }
+ 
+-export function verifyRequest(req, { secret, algorithms }) {
++export function verifyRequest(req, { secret, algorithms, users = createJsonUserStore() }) {
+   const extracted = extractToken(req);
+   if (extracted.status) return extracted;
+ 
+@@ -36,15 +43,17 @@ export function verifyRequest(req, { secret, algorithms }) {
+ 
+   // 2. L'utilisateur existe-t-il encore et a-t-il le droit d'être là ?
+   // toPublicUser : req.auth.user ne doit jamais contenir le hash du mot de passe.
+-  const user = toPublicUser(findUserById(payload.sub));
+-  if (!user) return { status: AuthStatus.USER_NOT_FOUND, reason: `sub=${payload.sub}` };
+-  if (user.status === "banned") return { status: AuthStatus.USER_BANNED, user };
++  return then(users.findById(payload.sub), (found) => {
++    const user = toPublicUser(found);
++    if (!user) return { status: AuthStatus.USER_NOT_FOUND, reason: `sub=${payload.sub}` };
++    if (user.status === "banned") return { status: AuthStatus.USER_BANNED, user };
+ 
+-  // 3. Tout est bon : on joint les permissions du rôle pour l'étape d'autorisation.
+-  return {
+-    status: AuthStatus.AUTHENTICATED,
+-    user,
+-    permissions: getPermissionsForRole(user.role),
+-    payload,
+-  };
++    // 3. Tout est bon : on joint les permissions du rôle pour l'étape d'autorisation.
++    return then(users.getPermissions(user.role), (permissions) => ({
++      status: AuthStatus.AUTHENTICATED,
++      user,
++      permissions: permissions ?? [],
++      payload,
++    }));
++  });
+ }

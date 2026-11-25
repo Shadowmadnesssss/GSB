@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { API_URL } from '../config';
+import { api } from '../api';
 
 export default function StatsCards() {
   const [stats, setStats] = useState({
@@ -10,19 +10,11 @@ export default function StatsCards() {
     approved: 0,
     rejected: 0,
   });
-  const token = localStorage.getItem('token');
-
   useEffect(() => {
     async function fetchStats() {
       try {
-        const billsRes = await fetch(`${API_URL}/bills`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const bills = await billsRes.json();
-        const usersRes = await fetch(`${API_URL}/users`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const users = await usersRes.json();
+        const bills = await api.get('/bills');
+        const users = await api.get('/users');
         setStats({
           totalBills: bills.length,
           totalAmount: bills.reduce((sum, b) => sum + (b.amount || 0), 0),
@@ -36,7 +28,7 @@ export default function StatsCards() {
       }
     }
     fetchStats();
-  }, [token]);
+  }, []);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">

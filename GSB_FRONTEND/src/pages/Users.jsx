@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import Header from "../components/Header";
 import EditUserModal from "../components/EditUserModal";
-import { API_URL } from '../config';
+import { api } from '../api';
+import { logout } from '../auth';
 
 export default function Users() {
   const [users, setUsers] = useState([]);
@@ -9,7 +10,6 @@ export default function Users() {
   const [error, setError] = useState(null);
   const [editUser, setEditUser] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const token = localStorage.getItem('token');
   const [resetPasswordModal, setResetPasswordModal] = useState({ isOpen: false, user: null });
   const [resetPasswordForm, setResetPasswordForm] = useState({ password: '', confirmPassword: '' });
   const [resetPasswordError, setResetPasswordError] = useState(null);
@@ -19,20 +19,16 @@ export default function Users() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${API_URL}/users`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!res.ok) throw new Error("Error while fetching users");
-        const data = await res.json();
+        const data = await api.get('/users');
         setUsers(data);
-      } catch (e) {
-        setError(e.message);
+      } catch {
+        setError("Error while fetching users");
       } finally {
         setLoading(false);
       }
     }
     fetchUsers();
-  }, [token]);
+  }, []);
 
   const handleEdit = (user) => {
     setEditUser(user);
@@ -48,14 +44,10 @@ export default function Users() {
   const handleDelete = async (user) => {
     if (!window.confirm(`Do you really want to delete user ${user.name || user.email}?`)) return;
     try {
-      const res = await fetch(`${API_URL}/users?email=${encodeURIComponent(user.email)}`, {
-        method: "DELETE",
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Error while deleting");
+      await api.delete('/users', { query: { email: user.email } });
       setUsers(users => users.filter(u => u._id !== user._id));
-    } catch (e) {
-      alert(e.message);
+    } catch {
+      alert("Error while deleting");
     }
   };
 
@@ -91,34 +83,21 @@ export default function Users() {
     }
 
     try {
-      const res = await fetch(`${API_URL}/users/password`, {
-        method: "PUT",
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          email: resetPasswordModal.user.email,
-          newPassword: resetPasswordForm.password,
-          isAdminReset: true
-        })
+      await api.put('/users/password', {
+        email: resetPasswordModal.user.email,
+        newPassword: resetPasswordForm.password,
+        isAdminReset: true
       });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Error while resetting password");
-      }
 
       alert("Password successfully reset!");
       setResetPasswordModal({ isOpen: false, user: null });
     } catch (e) {
-      setResetPasswordError(e.message);
+      setResetPasswordError(e.message || "Error while resetting password");
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+  const handleLogout = async () => {
+    await logout();
     window.location.href = '/login';
   };
 

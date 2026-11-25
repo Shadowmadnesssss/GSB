@@ -1,0 +1,32 @@
+[
+  {
+    "id": "trop-de-requetes-par-cle",
+    "description": "Trop de requêtes (tous statuts confondus) depuis la même clé : abus ou emballement d'un client",
+    "match": { "source": "auth" },
+    "scope": "key",
+    "threshold": 100,
+    "windowMs": 60000,
+    "cooldownMs": 900000,
+    "severity": "warn"
+  },
+  {
+    "id": "token-invalid-par-ip",
+    "description": "Trop de tokens invalides depuis la même clé (IP ou utilisateur) : tentative de falsification probable",
+    "match": { "source": "auth", "code": "TOKEN_INVALID" },
+    "scope": "key",
+    "threshold": 10,
+    "windowMs": 60000,
+    "cooldownMs": 900000,
+    "severity": "warn"
+  },
+  {
+    "id": "erreurs-internes-global",
+    "description": "Trop d'erreurs internes (tous bus confondus) : panne probable, pas une attaque",
+    "match": { "level": "error" },
+    "scope": "global",
+    "threshold": 5,
+    "windowMs": 60000,
+    "cooldownMs": 300000,
+    "severity": "error"
+  }
+]

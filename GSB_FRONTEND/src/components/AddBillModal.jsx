@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { API_URL } from '../config';
+import { api } from '../api';
 
 export default function AddBillModal({ isOpen, onClose, onSave }) {
   const [data, setData] = useState({
@@ -94,21 +94,8 @@ export default function AddBillModal({ isOpen, onClose, onSave }) {
       const formData = new FormData();
       formData.append('proof', data.proof);
       formData.append('metadata', JSON.stringify({amount: data.amount, date: data.date, type: data.type, description: data.description, status: data.status, merchant: data.merchant}));
-      const token = localStorage.getItem('token') || '';
-      const response = await fetch(`${API_URL}/bills`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      });
-      if (!response.ok) {
-        const errData = await response.json();
-        setError(errData.message || 'Error creating expense note.');
-        setIsSubmitting(false);
-        return;
-      }
-      const billData = await response.json();
+      // FormData envoyé tel quel (multipart) par le SDK
+      const billData = await api.post('/bills', formData);
       setSuccess('Expense note created successfully!');
       onSave(billData);
       setTimeout(() => {
@@ -116,7 +103,9 @@ export default function AddBillModal({ isOpen, onClose, onSave }) {
         onClose();
       }, 1200);
     } catch (error) {
-      setError('Error creating expense note.');
+      // Erreur métier (400...) : message du serveur ; réseau ou 5xx : message générique
+      const useServerMessage = error?.status >= 400 && error.status < 500 && error.message;
+      setError(useServerMessage ? error.message : 'Error creating expense note.');
     } finally {
       setIsSubmitting(false);
     }

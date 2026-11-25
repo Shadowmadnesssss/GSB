@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
-import { API_URL } from '../config';
+import { api } from '../api';
 
 const COLORS = ["#", "#", "#", "#", "#", "#", "#"];
 
@@ -11,20 +11,15 @@ const STATUS_COLORS = ['#13fb00', '#2196F3', '#E53935'];
 
 export default function StatsCharts() {
   const [bills, setBills] = useState([]);
-  const token = localStorage.getItem('token');
-
   useEffect(() => {
     async function fetchBills() {
       try {
-        const res = await fetch(`${API_URL}/bills`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await res.json();
+        const data = await api.get('/bills');
         setBills(data);
       } catch (e) {}
     }
     fetchBills();
-  }, [token]);
+  }, []);
 
   // Distribution by type
   const typeData = Array.from(

@@ -1,5 +1,5 @@
-const mongoose = require('mongoose')
-const sha256 = require('js-sha256')
+import mongoose from 'mongoose'
+import { hashPassword } from '../lib/bus-tcl/src/index.js'
 
 const userSchema = new mongoose.Schema({
     name: {
@@ -25,7 +25,12 @@ const userSchema = new mongoose.Schema({
     },
 })
 
-userSchema.pre('save', async function(next) {
+// Le hash du mot de passe ne sort jamais dans les réponses de l'API
+const hidePassword = { transform: (_doc, ret) => { delete ret.password; return ret } }
+userSchema.set('toJSON', hidePassword)
+userSchema.set('toObject', hidePassword)
+
+userSchema.pre('save',async function(next) {
     // Ne vérifier l'existence que si c'est un nouveau document
     if (this.isNew) {
         const existingUser = await User.findOne({ email: this.email })
@@ -33,13 +38,13 @@ userSchema.pre('save', async function(next) {
             throw new Error('User already exists', { cause: 400 })
         }
     }
-    // Hash password only if it has been modified
-    if (this.isModified('password')) {
-        this.password = sha256(this.password + process.env.SALT)
+    // Hash password only if it has been modified (scrypt, format Bus TCL)
+    if (this.isModified('password') && !this.password.startsWith('scrypt$')) {
+        this.password = await hashPassword(this.password)
     }
     next()
 })
 
 
 const User = mongoose.model('User', userSchema)
-module.exports = User
+export default User

@@ -4,8 +4,8 @@ import Header from '../components/Header';
 import BillModal from '../components/BillModal';
 import AddBillModal from '../components/AddBillModal';
 import BillsStatsChart from '../components/BillsStatsChart';
-import { removeToken } from '../auth';
-import { API_URL } from '../config';
+import { logout } from '../auth';
+import { api } from '../api';
 
 const STATUS_OPTIONS = ["Pending", "Approved", "Rejected"];
 
@@ -16,7 +16,6 @@ export default function Dashboard() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const token = localStorage.getItem('token') || '';
   const user = JSON.parse(localStorage.getItem('user'));
   const userId = user?._id;
   const userRole = user?.role;
@@ -29,26 +28,14 @@ export default function Dashboard() {
     (async () => {
       try {
         // Fetch bills
-        const billsResponse = await fetch(`${API_URL}/bills`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        if (billsResponse.status === 401) {
-          removeToken();
-          localStorage.removeItem('user');
-          navigate('/login');
-          return;
-        }
-        const billsData = await billsResponse.json();
+        // Session expirée : le SDK la renouvelle seul, ou renvoie au login (onAuthError).
+        const billsData = await api.get('/bills');
         setBills(billsData);
       } catch (error) {
         console.error('Error fetching data:', error);
       }
     })();
-  }, [token, navigate, userRole]);
+  }, [userRole]);
 
   // Ensure proper modal cleanup when component unmounts
   useEffect(() => {
@@ -152,9 +139,8 @@ export default function Dashboard() {
     setIsAddModalOpen(false);
   };
 
-  const handleLogout = () => {
-    removeToken();
-    localStorage.removeItem('user');
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 
@@ -182,14 +168,8 @@ export default function Dashboard() {
   const handleChangeStatus = async () => {
     try {
       await Promise.all(selectedBills.map(async (billId) => {
-                  await fetch(`${API_URL}/bills/${billId}/status`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ status: newStatus })
-        });
+        // PUT /bills/:id : le backend n'applique le statut que pour un admin.
+        await api.put(`/bills/${billId}`, { status: newStatus });
       }));
       // Update locally
       setBills((prev) => prev.map((bill) =>

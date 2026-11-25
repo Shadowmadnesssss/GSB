@@ -1,5 +1,5 @@
-const Bill = require('../models/bill_model')
-const { uploadToS3, getSignedUrl } = require('../utils/s3')
+import Bill from '../models/bill_model.js'
+import { uploadToS3, getSignedUrl } from '../utils/s3.js'
 
 const createBill = async (req, res) => {
     try {
@@ -150,4 +150,4 @@ const getBillProofUrl = async (req, res) => {
     }
 };
 
-module.exports = { createBill, getBills, getBillById, updateBill, deleteBill, getBillProofUrl }
+export { createBill, getBills, getBillById, updateBill, deleteBill, getBillProofUrl }

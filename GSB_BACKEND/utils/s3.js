@@ -1,6 +1,6 @@
-const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
-const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
-const { v4: uuidv4 } = require('uuid');
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { v4 as uuidv4 } from 'uuid';
 
 const region = process.env.AWS_REGION || 'eu-north-1';
 const bucketName = process.env.AWS_BUCKET_NAME || process.env.BUCKET_NAME;
@@ -46,4 +46,4 @@ const getSignedUrlForKey = async (key, expiresInSeconds = 300) => {
     return await getSignedUrl(s3Client, command, { expiresIn: expiresInSeconds });
 };
 
-module.exports = { uploadToS3, getSignedUrl: getSignedUrlForKey }
+export { uploadToS3, getSignedUrlForKey as getSignedUrl }

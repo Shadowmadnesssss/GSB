@@ -1,8 +1,9 @@
-const express = require('express')
+import express from 'express'
+import { createBill, getBills, getBillById, updateBill, deleteBill, getBillProofUrl } from '../controllers/bill_controller.js'
+import { verifyToken } from '../controllers/authentication_controller.js'
+import upload from '../middleware/upload.js'
+
 const router = express.Router()
-const { createBill, getBills, getBillById, updateBill, deleteBill, getBillProofUrl } = require('../controllers/bill_controller')
-const { verifyToken } = require('../controllers/authentication_controller')
-const upload = require('../middleware/upload')
 
 router.post('/', verifyToken, upload.single('proof'), createBill)
 router.get('/', verifyToken, getBills)
@@ -11,4 +12,4 @@ router.put('/:id', verifyToken, updateBill)
 router.delete('/:id', verifyToken, deleteBill)
 router.get('/:id/proof-url', verifyToken, getBillProofUrl)
 
-module.exports = router 
+export default router

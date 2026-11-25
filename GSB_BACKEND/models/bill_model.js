@@ -1,4 +1,4 @@
-const mongoose = require('mongoose')
+import mongoose from 'mongoose'
 
 const billSchema = new mongoose.Schema({
   date: {
@@ -35,4 +35,4 @@ const billSchema = new mongoose.Schema({
   },
 })
 const Bill = mongoose.model('Bills', billSchema)
-module.exports = Bill
+export default Bill

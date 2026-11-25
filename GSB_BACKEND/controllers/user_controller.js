@@ -1,6 +1,6 @@
-const { sha256 } = require('js-sha256')
-const User = require('../models/user_model')
-const Bill = require('../models/bill_model')
+import User from '../models/user_model.js'
+import Bill from '../models/bill_model.js'
+import { hashPassword, verifyUserPassword } from '../bus/userStore.js'
 
 const createUser = async (req, res) => {
     try {
@@ -16,6 +16,12 @@ const createUser = async (req, res) => {
             res.status(500).json({ message: "Server error" })
         }
     }
+}
+
+// Inscription publique (POST /auth/register) : le rôle n'est jamais choisi par le client.
+const registerUser = async (req, res) => {
+    req.body = { ...(req.body ?? {}), role: 'USER' }
+    return createUser(req, res)
 }
 
 const getUsers = async (req, res) => {
@@ -72,7 +78,8 @@ const updateUser = async (req, res) => {
         const updateFields = {}
         if (name) updateFields.name = name
         if (newEmail) updateFields.email = newEmail
-        if (password) updateFields.password = password
+        // findOneAndUpdate ne déclenche pas le hook pre('save') : on hache ici
+        if (password) updateFields.password = await hashPassword(password)
         if (role) updateFields.role = role
 
         // Mettre à jour l'utilisateur
@@ -120,10 +127,10 @@ const resetPassword = async (req, res) => {
             if (req.user.email !== email) {
                 throw new Error('Unauthorized', { cause: 403 });
             }
-            // Vérifie l'ancien mot de passe
-            const hash = require('js-sha256').sha256;
-            if (user.password !== hash(currentPassword + process.env.SALT)) {
-                throw new Error('Incorrect old password', { cause: 401 });
+            // Vérifie l'ancien mot de passe (scrypt, ou ancien format sha256)
+            // 400 et pas 401 : un 401 signifie « session perdue » pour le SDK, qui déconnecterait.
+            if (!(await verifyUserPassword(currentPassword, user.password, null))) {
+                throw new Error('Incorrect old password', { cause: 400 });
             }
         } else {
             // Si admin, vérifie le rôle
@@ -142,8 +149,8 @@ const resetPassword = async (req, res) => {
             res.status(404).json({ message: error.message });
         } else if (error['cause'] === 403) {
             res.status(403).json({ message: error.message });
-        } else if (error['cause'] === 401) {
-            res.status(401).json({ message: error.message });
+        } else if (error['cause'] === 400) {
+            res.status(400).json({ message: error.message });
         } else {
             console.log(error);
             res.status(500).json({ message: "Server error" });
@@ -151,5 +158,5 @@ const resetPassword = async (req, res) => {
     }
 };
 
-module.exports = { createUser, getUsers, getUserByEmail, updateUser, deleteUser, resetPassword }
+export { createUser, registerUser, getUsers, getUserByEmail, updateUser, deleteUser, resetPassword }
 
