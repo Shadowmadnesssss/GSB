@@ -22,8 +22,9 @@ export const api = createBusClient({
       try { localStorage.removeItem(USER_KEY); } catch { /* idem */ }
     }
   },
-  // Session expirée ou révoquée : retour à la page de connexion.
+  // Session expirée ou révoquée : retour à la page de connexion
+  // (/monitor affiche son propre formulaire de connexion).
   onAuthError: () => {
-    if (window.location.pathname !== '/login') window.location.assign('/login');
+    if (!['/login', '/monitor'].includes(window.location.pathname)) window.location.assign('/login');
   },
 });

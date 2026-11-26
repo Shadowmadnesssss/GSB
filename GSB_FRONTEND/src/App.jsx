@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -7,6 +8,9 @@ import Settings from './pages/Settings';
 import PrivateRoute from './PrivateRoute';
 import Sidebar from './components/Sidebar';
 import { isAuthenticated } from './auth';
+
+// Monitoring du backend (SDK Bus TCL), chargé seulement quand on ouvre /monitor.
+const MonitorPage = lazy(() => import('./monitor/MonitorPage.jsx'));
 
 function AppLayout({ children }) {
   const user = JSON.parse(localStorage.getItem('user'));
@@ -72,6 +76,14 @@ function App() {
               </AppLayout>
             </PrivateRoute>
           } 
+        />
+        <Route
+          path="/monitor"
+          element={
+            <Suspense fallback={null}>
+              <MonitorPage />
+            </Suspense>
+          }
         />
         <Route path="/" element={<Navigate to={isAuthenticated() ? "/dashboard" : "/login"} />} />
       </Routes>
